@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 )
 
 func main() {
@@ -20,13 +21,26 @@ func main() {
 	}
 	defer l.Close()
 
-	conn, err := l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
+	wg := new(sync.WaitGroup)
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			break
+		}
+		wg.Add(1)
+		go func() {
+			handleConn(conn)
+			defer conn.Close()
+			defer wg.Done()
+		}()
 	}
-	defer conn.Close()
 
+	wg.Wait()
+	fmt.Println("Server closed connection")
+}
+
+func handleConn(conn net.Conn) {
 	req, err := readRequest(conn)
 	if err != nil {
 		fmt.Println("Error reading request: ", err.Error())
@@ -97,8 +111,6 @@ func main() {
 			fmt.Println("Error writing response: ", err.Error())
 		}
 	}
-
-	fmt.Println("Server closed connection")
 }
 
 type HTTPRequest struct {
