@@ -18,12 +18,14 @@ func main() {
 		fmt.Println("Failed to bind to port 4221")
 		os.Exit(1)
 	}
+	defer l.Close()
 
 	conn, err := l.Accept()
 	if err != nil {
 		fmt.Println("Error accepting connection: ", err.Error())
 		os.Exit(1)
 	}
+	defer conn.Close()
 
 	req, err := readRequest(conn)
 	if err != nil {
@@ -47,7 +49,10 @@ func main() {
 			},
 			Body: message,
 		}
-		writeResponse(conn, res)
+		err := writeResponse(conn, res)
+		if err != nil {
+			fmt.Println("Error writing response: ", err.Error())
+		}
 	} else {
 		res := HTTPResponse{
 			Version:    "HTTP/1.1",
@@ -56,13 +61,10 @@ func main() {
 			Headers:    map[string]string{},
 			Body:       "",
 		}
-		writeResponse(conn, res)
-	}
-
-	err = conn.Close()
-	if err != nil {
-		fmt.Println("Error closing connection: ", err.Error())
-		os.Exit(1)
+		err := writeResponse(conn, res)
+		if err != nil {
+			fmt.Println("Error writing response: ", err.Error())
+		}
 	}
 
 	fmt.Println("Server closed connection")
@@ -139,11 +141,21 @@ func parseStartLine(startLine string) (*HTTPStartLine, error) {
 	}, nil
 }
 
-func writeResponse(conn net.Conn, response HTTPResponse) {
-	conn.Write([]byte(response.Version + " " + fmt.Sprintf("%d", response.StatusCode) + " " + response.StatusText + "\r\n"))
-	for key, value := range response.Headers {
-		conn.Write([]byte(key + ": " + value + "\r\n"))
+func writeResponse(conn net.Conn, response HTTPResponse) error {
+	_, err := conn.Write([]byte(response.Version + " " + fmt.Sprintf("%d", response.StatusCode) + " " + response.StatusText + "\r\n"))
+	if err != nil {
+		return err
 	}
-	conn.Write([]byte("\r\n"))
-	conn.Write([]byte(response.Body))
+	for key, value := range response.Headers {
+		_, err = conn.Write([]byte(key + ": " + value + "\r\n"))
+		if err != nil {
+			return err
+		}
+	}
+	_, err = conn.Write([]byte("\r\n"))
+	if err != nil {
+		return err
+	}
+	_, err = conn.Write([]byte(response.Body))
+	return err
 }
