@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -33,8 +34,20 @@ func main() {
 	fmt.Printf("Method: \"%s\" Path: \"%s\"\n", req.Method, req.Path)
 
 	// Write HTTP response
-	if req.Path == "/" {
-		conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
+	if strings.Contains(req.Path, "/echo") {
+		message := req.Path[len("/echo/"):]
+
+		res := HTTPResponse{
+			Version:    "HTTP/1.1",
+			StatusCode: 200,
+			StatusText: "OK",
+			Headers: map[string]string{
+				"Content-Type":   "text/html",
+				"Content-Length": fmt.Sprintf("%d", len(message)),
+			},
+			Body: message,
+		}
+		writeResponse(conn, res)
 	} else {
 		conn.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
 	}
@@ -53,6 +66,14 @@ type HTTPRequest struct {
 	Path    string
 	Headers map[string]string
 	Body    string
+}
+
+type HTTPResponse struct {
+	Version    string
+	StatusCode int
+	StatusText string
+	Headers    map[string]string
+	Body       string
 }
 
 func readRequest(conn net.Conn) (*HTTPRequest, error) {
@@ -109,4 +130,13 @@ func parseStartLine(startLine string) (*HTTPStartLine, error) {
 		Path:    path,
 		Version: version,
 	}, nil
+}
+
+func writeResponse(conn net.Conn, response HTTPResponse) {
+	conn.Write([]byte(response.Version + " " + fmt.Sprintf("%d", response.StatusCode) + " " + response.StatusText + "\r\n"))
+	for key, value := range response.Headers {
+		conn.Write([]byte(key + ": " + value + "\r\n"))
+	}
+	conn.Write([]byte("\r\n"))
+	conn.Write([]byte(response.Body))
 }
