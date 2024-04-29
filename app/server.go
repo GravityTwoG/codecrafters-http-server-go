@@ -51,8 +51,8 @@ func main() {
 	} else {
 		res := HTTPResponse{
 			Version:    "HTTP/1.1",
-			StatusCode: 200,
-			StatusText: "OK",
+			StatusCode: 404,
+			StatusText: "Not Found",
 			Headers:    map[string]string{},
 			Body:       "",
 		}
