@@ -42,7 +42,7 @@ func main() {
 			StatusCode: 200,
 			StatusText: "OK",
 			Headers: map[string]string{
-				"Content-Type":   "text/html",
+				"Content-Type":   "text/plain",
 				"Content-Length": fmt.Sprintf("%d", len(message)),
 			},
 			Body: message,
