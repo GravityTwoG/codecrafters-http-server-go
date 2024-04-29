@@ -34,6 +34,9 @@ func main() {
 	}
 
 	fmt.Printf("Method: \"%s\" Path: \"%s\"\n", req.Method, req.Path)
+	for key, value := range req.Headers {
+		fmt.Printf("Header: %s: %s\n", key, value)
+	}
 
 	// Write HTTP response
 	if req.Path == "/" {
@@ -72,10 +75,11 @@ func main() {
 			StatusText: "OK",
 			Headers: map[string]string{
 				"Content-Type":   "text/plain",
-				"Content-Length": fmt.Sprintf("%d", len(req.Headers["User-Agent"])),
+				"Content-Length": fmt.Sprintf("%d", len(req.Headers["User-Agent"])-1),
 			},
 			Body: req.Headers["User-Agent"],
 		}
+		fmt.Println(len(req.Headers["User-Agent"]))
 		err := writeResponse(conn, res)
 		if err != nil {
 			fmt.Println("Error writing response: ", err.Error())
