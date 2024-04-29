@@ -36,7 +36,19 @@ func main() {
 	fmt.Printf("Method: \"%s\" Path: \"%s\"\n", req.Method, req.Path)
 
 	// Write HTTP response
-	if strings.Contains(req.Path, "/echo") {
+	if req.Path == "/" {
+		res := HTTPResponse{
+			Version:    "HTTP/1.1",
+			StatusCode: 200,
+			StatusText: "OK",
+			Headers:    map[string]string{},
+			Body:       "",
+		}
+		err := writeResponse(conn, res)
+		if err != nil {
+			fmt.Println("Error writing response: ", err.Error())
+		}
+	} else if strings.Contains(req.Path, "/echo/") {
 		message := req.Path[len("/echo/"):]
 
 		res := HTTPResponse{
