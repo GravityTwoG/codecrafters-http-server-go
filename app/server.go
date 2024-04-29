@@ -49,7 +49,14 @@ func main() {
 		}
 		writeResponse(conn, res)
 	} else {
-		conn.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
+		res := HTTPResponse{
+			Version:    "HTTP/1.1",
+			StatusCode: 200,
+			StatusText: "OK",
+			Headers:    map[string]string{},
+			Body:       "",
+		}
+		writeResponse(conn, res)
 	}
 
 	err = conn.Close()
