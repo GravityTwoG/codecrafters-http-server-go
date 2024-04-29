@@ -65,6 +65,21 @@ func main() {
 		if err != nil {
 			fmt.Println("Error writing response: ", err.Error())
 		}
+	} else if strings.Contains(req.Path, "/user-agent") {
+		res := HTTPResponse{
+			Version:    "HTTP/1.1",
+			StatusCode: 200,
+			StatusText: "OK",
+			Headers: map[string]string{
+				"Content-Type":   "text/plain",
+				"Content-Length": fmt.Sprintf("%d", len(req.Headers["User-Agent"])),
+			},
+			Body: req.Headers["User-Agent"],
+		}
+		err := writeResponse(conn, res)
+		if err != nil {
+			fmt.Println("Error writing response: ", err.Error())
+		}
 	} else {
 		res := HTTPResponse{
 			Version:    "HTTP/1.1",
@@ -105,6 +120,10 @@ func readRequest(conn net.Conn) (*HTTPRequest, error) {
 	if err != nil {
 		return &HTTPRequest{}, err
 	}
+	_, err = reader.ReadByte()
+	if err != nil {
+		return &HTTPRequest{}, err
+	}
 
 	// Parse start line
 	startLine, err := parseStartLine(startLineStr)
@@ -112,10 +131,15 @@ func readRequest(conn net.Conn) (*HTTPRequest, error) {
 		return &HTTPRequest{}, err
 	}
 
+	headers, err := parseHeaders(reader)
+	if err != nil {
+		return &HTTPRequest{}, err
+	}
+
 	return &HTTPRequest{
 		Method:  startLine.Method,
 		Path:    startLine.Path,
-		Headers: map[string]string{},
+		Headers: headers,
 		Body:    "",
 	}, nil
 }
@@ -151,6 +175,29 @@ func parseStartLine(startLine string) (*HTTPStartLine, error) {
 		Path:    path,
 		Version: version,
 	}, nil
+}
+
+func parseHeaders(reader *bufio.Reader) (map[string]string, error) {
+	headers := map[string]string{}
+	for {
+		line, err := reader.ReadString('\r')
+		if err != nil {
+			return headers, err
+		}
+		_, err = reader.ReadByte()
+		if err != nil {
+			return headers, err
+		}
+		if line == "\r\n" || line == "\r" {
+			break
+		}
+		keyValue := strings.Split(line, ": ")
+		if len(keyValue) != 2 {
+			return headers, fmt.Errorf("invalid header: %s", line)
+		}
+		headers[keyValue[0]] = keyValue[1]
+	}
+	return headers, nil
 }
 
 func writeResponse(conn net.Conn, response HTTPResponse) error {
