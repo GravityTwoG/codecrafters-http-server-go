@@ -65,7 +65,7 @@ type HTTPRequest struct {
 	Method  string
 	Path    string
 	Headers map[string]string
-	Body    string
+	Body    []byte
 }
 
 type HTTPResponse struct {
@@ -100,11 +100,28 @@ func readRequest(conn net.Conn) (*HTTPRequest, error) {
 		return &HTTPRequest{}, err
 	}
 
+	// Read body
+	if startLine.Method == "POST" {
+		var body []byte
+		n, err := reader.Read(body)
+		if err != nil {
+			return &HTTPRequest{}, err
+		}
+		headers["Content-Length"] = fmt.Sprintf("%d", n)
+		fmt.Printf("Body: %s\n", body)
+		return &HTTPRequest{
+			Method:  startLine.Method,
+			Path:    startLine.Path,
+			Headers: headers,
+			Body:    body,
+		}, nil
+	}
+
 	return &HTTPRequest{
 		Method:  startLine.Method,
 		Path:    startLine.Path,
 		Headers: headers,
-		Body:    "",
+		Body:    []byte{},
 	}, nil
 }
 
