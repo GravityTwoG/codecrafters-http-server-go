@@ -88,7 +88,7 @@ func userAgent(ctx *http.HTTPContext) {
 		StatusText: "OK",
 		Headers: map[string]string{
 			"Content-Type":   "text/plain",
-			"Content-Length": fmt.Sprintf("%d", len(ctx.Req.Headers["User-Agent"])-1),
+			"Content-Length": fmt.Sprintf("%d", len(ctx.Req.Headers["User-Agent"])),
 		},
 		Body: []byte(ctx.Req.Headers["User-Agent"]),
 	}

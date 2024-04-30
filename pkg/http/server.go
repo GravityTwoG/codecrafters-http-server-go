@@ -80,18 +80,8 @@ type HTTPResponse struct {
 func readRequest(conn net.Conn) (*HTTPRequest, error) {
 	reader := bufio.NewReader(conn)
 
-	// Read start line
-	startLineStr, err := reader.ReadString('\r')
-	if err != nil {
-		return &HTTPRequest{}, err
-	}
-	_, err = reader.ReadByte()
-	if err != nil {
-		return &HTTPRequest{}, err
-	}
-
 	// Parse start line
-	startLine, err := parseStartLine(startLineStr)
+	startLine, err := parseStartLine(reader)
 	if err != nil {
 		return &HTTPRequest{}, err
 	}
@@ -124,8 +114,12 @@ type HTTPStartLine struct {
 	Version string
 }
 
-func parseStartLine(startLine string) (*HTTPStartLine, error) {
-
+func parseStartLine(reader *bufio.Reader) (*HTTPStartLine, error) {
+	startLine, err := reader.ReadString('\r')
+	if err != nil {
+		return nil, err
+	}
+	startLine = strings.Trim(startLine, "\r")
 	var method string
 	for i := 0; i < len(startLine); i++ {
 		if startLine[i] == ' ' {
@@ -158,19 +152,15 @@ func parseHeaders(reader *bufio.Reader) (map[string]string, error) {
 		if err != nil {
 			return headers, err
 		}
-		line = strings.Trim(line, "\r\n")
-		line = strings.Trim(line, "\n")
-
-		if line == "\r" {
+		if line == "\n\r" {
 			reader.ReadByte()
 			break
 		}
-		if line == "\n" || line == "" {
-			break
-		}
+		line = strings.Trim(line, "\n")
+		line = strings.Trim(line, "\r")
 		keyValue := strings.Split(line, ": ")
 		if len(keyValue) != 2 {
-			return headers, fmt.Errorf("invalid header: %s", line)
+			return headers, fmt.Errorf("invalid header: %d: %s", len(line), line)
 		}
 		headers[keyValue[0]] = keyValue[1]
 	}
@@ -181,8 +171,9 @@ func parseBody(headers map[string]string, reader *bufio.Reader) ([]byte, error) 
 	var body []byte
 	contentLength, err := strconv.Atoi(headers["Content-Length"])
 	if err != nil {
-		return body, err
+		return nil, err
 	}
+	fmt.Printf("Content-Length: %d\n", contentLength)
 	body = make([]byte, contentLength)
 	n, err := reader.Read(body)
 	if err != nil {
@@ -196,6 +187,10 @@ func parseBody(headers map[string]string, reader *bufio.Reader) ([]byte, error) 
 }
 
 func writeResponse(conn net.Conn, response *HTTPResponse) error {
+	fmt.Printf("Responding with %s %d %s\n", response.Version, response.StatusCode, response.StatusText)
+	fmt.Printf("Resp Headers: %+v\n", response.Headers)
+	fmt.Printf("Resp Body: %s\n", response.Body)
+
 	_, err := conn.Write([]byte(response.Version + " " + fmt.Sprintf("%d", response.StatusCode) + " " + response.StatusText + "\r\n"))
 	if err != nil {
 		return err
