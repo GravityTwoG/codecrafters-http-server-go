@@ -7,42 +7,42 @@ import (
 	"path"
 	"strings"
 
-	"github.com/codecrafters-io/http-server-starter-go/pkg/http"
+	"github.com/GravityTwoG/http-server-starter-go/pkg/http"
 )
 
 func main() {
 	workdir := flag.String("directory", "~", "absolute path to the working directory")
-
 	flag.Parse()
 	fmt.Println("Workdir:", *workdir)
 
 	fileServer := createFileServer(*workdir)
 
-	handleFunc := func(ctx *http.HTTPContext) {
-		// Write HTTP response
+	router := func(ctx *http.HTTPContext) {
 		req := ctx.Req
-		if req.Path == "/" {
+
+		switch {
+		case req.Path == "/":
 			index(ctx)
 			return
-		} else if strings.Contains(req.Path, "/echo/") {
+
+		case strings.Contains(req.Path, "/echo/"):
 			echo(ctx)
 			return
-		} else if strings.Contains(req.Path, "/user-agent") {
+
+		case strings.Contains(req.Path, "/user-agent"):
 			userAgent(ctx)
 			return
-		} else if strings.Contains(req.Path, "/files/") {
+
+		case strings.Contains(req.Path, "/files/"):
 			if req.Method == "GET" {
 				fileServer.serveFiles(ctx)
-				return
-			}
-			if req.Method == "POST" {
+			} else if req.Method == "POST" {
 				fileServer.createFile(ctx)
-				return
 			}
+			return
 		}
 
 		res := http.HTTPResponse{
-			Version:    "HTTP/1.1",
 			StatusCode: 404,
 			StatusText: "Not Found",
 			Headers:    map[string]string{},
@@ -51,12 +51,11 @@ func main() {
 		ctx.Respond(&res)
 	}
 
-	http.CreateServer(handleFunc)
+	http.CreateServer(router)
 }
 
 func index(ctx *http.HTTPContext) {
 	res := http.HTTPResponse{
-		Version:    "HTTP/1.1",
 		StatusCode: 200,
 		StatusText: "OK",
 		Headers:    map[string]string{},
@@ -69,12 +68,10 @@ func echo(ctx *http.HTTPContext) {
 	message := ctx.Req.Path[len("/echo/"):]
 
 	res := http.HTTPResponse{
-		Version:    "HTTP/1.1",
 		StatusCode: 200,
 		StatusText: "OK",
 		Headers: map[string]string{
-			"Content-Type":   "text/plain",
-			"Content-Length": fmt.Sprintf("%d", len(message)),
+			"Content-Type": "text/plain",
 		},
 		Body: []byte(message),
 	}
@@ -83,12 +80,10 @@ func echo(ctx *http.HTTPContext) {
 
 func userAgent(ctx *http.HTTPContext) {
 	res := http.HTTPResponse{
-		Version:    "HTTP/1.1",
 		StatusCode: 200,
 		StatusText: "OK",
 		Headers: map[string]string{
-			"Content-Type":   "text/plain",
-			"Content-Length": fmt.Sprintf("%d", len(ctx.Req.Headers["User-Agent"])),
+			"Content-Type": "text/plain",
 		},
 		Body: []byte(ctx.Req.Headers["User-Agent"]),
 	}
@@ -109,21 +104,19 @@ func (f *FileServer) serveFiles(ctx *http.HTTPContext) {
 	data, err := os.ReadFile(path.Join(f.workdir, filename))
 	if err != nil {
 		res := http.HTTPResponse{
-			Version:    "HTTP/1.1",
 			StatusCode: 404,
 			StatusText: "Not Found",
 			Headers:    map[string]string{},
-			Body:       []byte(""),
+			Body:       []byte{},
 		}
 		ctx.Respond(&res)
+		return
 	}
 	res := http.HTTPResponse{
-		Version:    "HTTP/1.1",
 		StatusCode: 200,
 		StatusText: "OK",
 		Headers: map[string]string{
-			"Content-Type":   "application/octet-stream",
-			"Content-Length": fmt.Sprintf("%d", len(data)),
+			"Content-Type": "application/octet-stream",
 		},
 		Body: data,
 	}
@@ -136,7 +129,6 @@ func (f *FileServer) createFile(ctx *http.HTTPContext) {
 	err := os.WriteFile(path.Join(f.workdir, filename), []byte(ctx.Req.Body), 0644)
 	if err != nil {
 		res := http.HTTPResponse{
-			Version:    "HTTP/1.1",
 			StatusCode: 500,
 			StatusText: "Internal Server Error",
 			Headers:    map[string]string{},
@@ -146,7 +138,6 @@ func (f *FileServer) createFile(ctx *http.HTTPContext) {
 	}
 
 	res := http.HTTPResponse{
-		Version:    "HTTP/1.1",
 		StatusCode: 201,
 		StatusText: "OK",
 		Headers:    map[string]string{},

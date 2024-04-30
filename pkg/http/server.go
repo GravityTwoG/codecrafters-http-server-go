@@ -187,13 +187,19 @@ func parseBody(headers map[string]string, reader *bufio.Reader) ([]byte, error) 
 }
 
 func writeResponse(conn net.Conn, response *HTTPResponse) error {
-	fmt.Printf("Responding with %s %d %s\n", response.Version, response.StatusCode, response.StatusText)
+	response.Version = "HTTP/1.1"
+
+	fmt.Printf("Responding with HTTP/1.1 %d %s\n", response.StatusCode, response.StatusText)
 	fmt.Printf("Resp Headers: %+v\n", response.Headers)
 	fmt.Printf("Resp Body: %s\n", response.Body)
 
 	_, err := conn.Write([]byte(response.Version + " " + fmt.Sprintf("%d", response.StatusCode) + " " + response.StatusText + "\r\n"))
 	if err != nil {
 		return err
+	}
+	_, hasContentLength := response.Headers["Content-Length"]
+	if len(response.Body) > 0 && !hasContentLength {
+		response.Headers["Content-Length"] = fmt.Sprintf("%d", len(response.Body))
 	}
 	for key, value := range response.Headers {
 		_, err = conn.Write([]byte(key + ": " + value + "\r\n"))
