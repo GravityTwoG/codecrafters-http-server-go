@@ -158,16 +158,14 @@ func parseHeaders(reader *bufio.Reader) (map[string]string, error) {
 		if err != nil {
 			return headers, err
 		}
-		ret, err := reader.ReadByte()
-		if err != nil {
-			return headers, err
-		}
-		if ret != '\n' {
-			return headers, fmt.Errorf("invalid header: %s", line)
-		}
 		line = strings.Trim(line, "\r\n")
+		line = strings.Trim(line, "\n")
 
-		if line == "\r" || line == "\n" || line == "" {
+		if line == "\r" {
+			reader.ReadByte()
+			break
+		}
+		if line == "\n" || line == "" {
 			break
 		}
 		keyValue := strings.Split(line, ": ")
