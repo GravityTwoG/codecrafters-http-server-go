@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -100,28 +101,20 @@ func readRequest(conn net.Conn) (*HTTPRequest, error) {
 		return &HTTPRequest{}, err
 	}
 
-	// Read body
+	body := []byte{}
 	if startLine.Method == "POST" {
-		var body []byte
-		n, err := reader.Read(body)
+		body, err = parseBody(headers, reader)
 		if err != nil {
 			return &HTTPRequest{}, err
 		}
-		headers["Content-Length"] = fmt.Sprintf("%d", n)
-		fmt.Printf("Body: %s\n", body)
-		return &HTTPRequest{
-			Method:  startLine.Method,
-			Path:    startLine.Path,
-			Headers: headers,
-			Body:    body,
-		}, nil
+		headers["Content-Length"] = fmt.Sprintf("%d", len(body))
 	}
 
 	return &HTTPRequest{
 		Method:  startLine.Method,
 		Path:    startLine.Path,
 		Headers: headers,
-		Body:    []byte{},
+		Body:    body,
 	}, nil
 }
 
@@ -165,11 +158,9 @@ func parseHeaders(reader *bufio.Reader) (map[string]string, error) {
 		if err != nil {
 			return headers, err
 		}
-		_, err = reader.ReadByte()
-		if err != nil {
-			return headers, err
-		}
-		if line == "\r\n" || line == "\r" {
+		line = strings.Trim(line, "\r\n")
+
+		if line == "\r" || line == "\n" || line == "" {
 			break
 		}
 		keyValue := strings.Split(line, ": ")
@@ -179,6 +170,24 @@ func parseHeaders(reader *bufio.Reader) (map[string]string, error) {
 		headers[keyValue[0]] = keyValue[1]
 	}
 	return headers, nil
+}
+
+func parseBody(headers map[string]string, reader *bufio.Reader) ([]byte, error) {
+	var body []byte
+	contentLength, err := strconv.Atoi(headers["Content-Length"])
+	if err != nil {
+		return body, err
+	}
+	body = make([]byte, contentLength)
+	n, err := reader.Read(body)
+	if err != nil {
+		return nil, err
+	}
+	if n != contentLength {
+		return nil, fmt.Errorf("invalid body length: %d", n)
+	}
+
+	return body, nil
 }
 
 func writeResponse(conn net.Conn, response *HTTPResponse) error {
