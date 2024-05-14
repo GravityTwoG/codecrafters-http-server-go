@@ -1,6 +1,8 @@
 package http
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"net"
 	"os"
@@ -66,6 +68,12 @@ func (ctx *HTTPContext) writeResponse(res *HTTPResponse) error {
 	encoding, acceptsEncoding := ctx.Req.Headers["Accept-Encoding"]
 	if acceptsEncoding && strings.Contains(encoding, "gzip") {
 		res.Headers["Content-Encoding"] = "gzip"
+
+		buffer := new(bytes.Buffer)
+		writer := gzip.NewWriter(buffer)
+		writer.Write(res.Body)
+		writer.Close()
+		res.Body = buffer.Bytes()
 	}
 
 	_, err := ctx.conn.Write([]byte(res.Version + " " + fmt.Sprintf("%d", res.StatusCode) + " " + res.StatusText + "\r\n"))
