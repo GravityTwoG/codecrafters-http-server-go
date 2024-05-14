@@ -1,11 +1,9 @@
 package http
 
 import (
-	"bufio"
 	"fmt"
 	"net"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 )
@@ -55,11 +53,45 @@ type HTTPContext struct {
 }
 
 func (ctx *HTTPContext) Respond(res *HTTPResponse) error {
-	err := writeResponse(ctx.conn, res)
+	return ctx.writeResponse(res)
+}
+
+func (ctx *HTTPContext) writeResponse(res *HTTPResponse) error {
+	res.Version = "HTTP/1.1"
+
+	fmt.Printf("Responding with HTTP/1.1 %d %s\n", res.StatusCode, res.StatusText)
+	fmt.Printf("Resp Headers: %+v\n", res.Headers)
+	fmt.Printf("Resp Body: %s\n", res.Body)
+
+	encoding, acceptsEncoding := ctx.Req.Headers["Accept-Encoding"]
+	if acceptsEncoding && strings.Contains(encoding, "gzip") {
+		res.Headers["Content-Encoding"] = "gzip"
+	}
+
+	_, err := ctx.conn.Write([]byte(res.Version + " " + fmt.Sprintf("%d", res.StatusCode) + " " + res.StatusText + "\r\n"))
 	if err != nil {
 		return err
 	}
-	return nil
+
+	_, hasContentLength := res.Headers["Content-Length"]
+	if len(res.Body) > 0 && !hasContentLength {
+		res.Headers["Content-Length"] = fmt.Sprintf("%d", len(res.Body))
+	}
+
+	for key, value := range res.Headers {
+		_, err = ctx.conn.Write([]byte(key + ": " + value + "\r\n"))
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = ctx.conn.Write([]byte("\r\n"))
+	if err != nil {
+		return err
+	}
+
+	_, err = ctx.conn.Write([]byte(res.Body))
+	return err
 }
 
 type HTTPRequest struct {
@@ -75,142 +107,4 @@ type HTTPResponse struct {
 	StatusText string
 	Headers    map[string]string
 	Body       []byte
-}
-
-func readRequest(conn net.Conn) (*HTTPRequest, error) {
-	reader := bufio.NewReader(conn)
-
-	// Parse start line
-	startLine, err := parseStartLine(reader)
-	if err != nil {
-		return &HTTPRequest{}, err
-	}
-
-	headers, err := parseHeaders(reader)
-	if err != nil {
-		return &HTTPRequest{}, err
-	}
-
-	body := []byte{}
-	if startLine.Method == "POST" {
-		body, err = parseBody(headers, reader)
-		if err != nil {
-			return &HTTPRequest{}, err
-		}
-		headers["Content-Length"] = fmt.Sprintf("%d", len(body))
-	}
-
-	return &HTTPRequest{
-		Method:  startLine.Method,
-		Path:    startLine.Path,
-		Headers: headers,
-		Body:    body,
-	}, nil
-}
-
-type HTTPStartLine struct {
-	Method  string
-	Path    string
-	Version string
-}
-
-func parseStartLine(reader *bufio.Reader) (*HTTPStartLine, error) {
-	startLine, err := reader.ReadString('\r')
-	if err != nil {
-		return nil, err
-	}
-	startLine = strings.Trim(startLine, "\r")
-	var method string
-	for i := 0; i < len(startLine); i++ {
-		if startLine[i] == ' ' {
-			method = startLine[0:i]
-			break
-		}
-	}
-
-	var version string
-	for i := len(startLine) - 1; i >= 0; i-- {
-		if startLine[i] == ' ' {
-			version = startLine[i+1:]
-			break
-		}
-	}
-
-	path := startLine[len(method)+1 : len(startLine)-len(version)-1]
-
-	return &HTTPStartLine{
-		Method:  method,
-		Path:    path,
-		Version: version,
-	}, nil
-}
-
-func parseHeaders(reader *bufio.Reader) (map[string]string, error) {
-	headers := map[string]string{}
-	for {
-		line, err := reader.ReadString('\r')
-		if err != nil {
-			return headers, err
-		}
-		if line == "\n\r" {
-			reader.ReadByte()
-			break
-		}
-		line = strings.Trim(line, "\n")
-		line = strings.Trim(line, "\r")
-		keyValue := strings.Split(line, ": ")
-		if len(keyValue) != 2 {
-			return headers, fmt.Errorf("invalid header: %d: %s", len(line), line)
-		}
-		headers[keyValue[0]] = keyValue[1]
-	}
-	return headers, nil
-}
-
-func parseBody(headers map[string]string, reader *bufio.Reader) ([]byte, error) {
-	var body []byte
-	contentLength, err := strconv.Atoi(headers["Content-Length"])
-	if err != nil {
-		return nil, err
-	}
-	fmt.Printf("Content-Length: %d\n", contentLength)
-	body = make([]byte, contentLength)
-	n, err := reader.Read(body)
-	if err != nil {
-		return nil, err
-	}
-	if n != contentLength {
-		return nil, fmt.Errorf("invalid body length: %d", n)
-	}
-
-	return body, nil
-}
-
-func writeResponse(conn net.Conn, response *HTTPResponse) error {
-	response.Version = "HTTP/1.1"
-
-	fmt.Printf("Responding with HTTP/1.1 %d %s\n", response.StatusCode, response.StatusText)
-	fmt.Printf("Resp Headers: %+v\n", response.Headers)
-	fmt.Printf("Resp Body: %s\n", response.Body)
-
-	_, err := conn.Write([]byte(response.Version + " " + fmt.Sprintf("%d", response.StatusCode) + " " + response.StatusText + "\r\n"))
-	if err != nil {
-		return err
-	}
-	_, hasContentLength := response.Headers["Content-Length"]
-	if len(response.Body) > 0 && !hasContentLength {
-		response.Headers["Content-Length"] = fmt.Sprintf("%d", len(response.Body))
-	}
-	for key, value := range response.Headers {
-		_, err = conn.Write([]byte(key + ": " + value + "\r\n"))
-		if err != nil {
-			return err
-		}
-	}
-	_, err = conn.Write([]byte("\r\n"))
-	if err != nil {
-		return err
-	}
-	_, err = conn.Write([]byte(response.Body))
-	return err
 }
