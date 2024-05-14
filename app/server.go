@@ -67,13 +67,19 @@ func index(ctx *http.HTTPContext) {
 func echo(ctx *http.HTTPContext) {
 	message := ctx.Req.Path[len("/echo/"):]
 
+	var headers map[string]string = make(map[string]string)
+	headers["Content-Type"] = "text/plain"
+
+	encoding, acceptsEncoding := ctx.Req.Headers["Accept-Encoding"]
+	if acceptsEncoding && encoding == "gzip" {
+		headers["Content-Encoding"] = "gzip"
+	}
+
 	res := http.HTTPResponse{
 		StatusCode: 200,
 		StatusText: "OK",
-		Headers: map[string]string{
-			"Content-Type": "text/plain",
-		},
-		Body: []byte(message),
+		Headers:    headers,
+		Body:       []byte(message),
 	}
 	ctx.Respond(&res)
 }
