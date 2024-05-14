@@ -145,7 +145,7 @@ func (f *FileServer) createFile(ctx *http.HTTPContext) {
 
 	res := http.HTTPResponse{
 		StatusCode: 201,
-		StatusText: "OK",
+		StatusText: "Created",
 		Headers:    map[string]string{},
 		Body:       []byte(""),
 	}
