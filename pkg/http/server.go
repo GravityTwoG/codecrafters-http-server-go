@@ -49,6 +49,21 @@ func CreateServer(handleFunc func(req *HTTPContext)) {
 	fmt.Println("Server closed connection")
 }
 
+type HTTPRequest struct {
+	Method  string
+	Path    string
+	Headers map[string]string
+	Body    []byte
+}
+
+type HTTPResponse struct {
+	Version    string
+	StatusCode int
+	StatusText string
+	Headers    map[string]string
+	Body       []byte
+}
+
 type HTTPContext struct {
 	conn net.Conn
 	Req  *HTTPRequest
@@ -65,29 +80,25 @@ func (ctx *HTTPContext) writeResponse(res *HTTPResponse) error {
 	fmt.Printf("Resp Headers: %+v\n", res.Headers)
 	fmt.Printf("Resp Body: %s\n", res.Body)
 
-	encoding, acceptsEncoding := ctx.Req.Headers["Accept-Encoding"]
-	if acceptsEncoding && strings.Contains(encoding, "gzip") {
-		res.Headers["Content-Encoding"] = "gzip"
-
-		buffer := new(bytes.Buffer)
-		writer := gzip.NewWriter(buffer)
-		writer.Write(res.Body)
-		writer.Close()
-		res.Body = buffer.Bytes()
-	}
-
-	_, err := ctx.conn.Write([]byte(res.Version + " " + fmt.Sprintf("%d", res.StatusCode) + " " + res.StatusText + "\r\n"))
+	err := ctx.prepareResponse(res)
 	if err != nil {
 		return err
 	}
 
-	_, hasContentLength := res.Headers["Content-Length"]
-	if len(res.Body) > 0 && !hasContentLength {
-		res.Headers["Content-Length"] = fmt.Sprintf("%d", len(res.Body))
+	startLine := fmt.Sprintf(
+		"%s %d %s\r\n",
+		res.Version,
+		res.StatusCode,
+		res.StatusText,
+	)
+	_, err = ctx.conn.Write([]byte(startLine))
+	if err != nil {
+		return err
 	}
 
 	for key, value := range res.Headers {
-		_, err = ctx.conn.Write([]byte(key + ": " + value + "\r\n"))
+		header := fmt.Sprintf("%s: %s\r\n", key, value)
+		_, err = ctx.conn.Write([]byte(header))
 		if err != nil {
 			return err
 		}
@@ -102,17 +113,35 @@ func (ctx *HTTPContext) writeResponse(res *HTTPResponse) error {
 	return err
 }
 
-type HTTPRequest struct {
-	Method  string
-	Path    string
-	Headers map[string]string
-	Body    []byte
+func (ctx *HTTPContext) prepareResponse(res *HTTPResponse) error {
+	encoding, acceptsEncoding := ctx.Req.Headers["Accept-Encoding"]
+	if acceptsEncoding && strings.Contains(encoding, "gzip") {
+		res.Headers["Content-Encoding"] = "gzip"
+		gzipped, err := encodeGzip(res.Body)
+		if err != nil {
+			return err
+		}
+		res.Body = gzipped
+	}
+
+	_, hasContentLength := res.Headers["Content-Length"]
+	if len(res.Body) > 0 && !hasContentLength {
+		res.Headers["Content-Length"] = fmt.Sprintf("%d", len(res.Body))
+	}
+
+	return nil
 }
 
-type HTTPResponse struct {
-	Version    string
-	StatusCode int
-	StatusText string
-	Headers    map[string]string
-	Body       []byte
+func encodeGzip(body []byte) ([]byte, error) {
+	buffer := new(bytes.Buffer)
+	writer := gzip.NewWriter(buffer)
+	_, err := writer.Write(body)
+	if err != nil {
+		return nil, err
+	}
+	err = writer.Close()
+	if err != nil {
+		return nil, err
+	}
+	return buffer.Bytes(), nil
 }
